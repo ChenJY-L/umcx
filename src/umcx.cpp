@@ -93,7 +93,7 @@ struct MCX_medium {
 };
 /// Global simulation settings, all constants throughout the simulation
 struct MCX_param {
-    float tstart, tend, rtstep, unitinmm;
+    float tstart, tend, rtstep, unitinmm, detna;
     int maxgate, isreflect, isnormalized, issavevol, issavedet, savedetflag, mediumnum, outputtype, detnum, maxdetphotons, srctype;
     float4 srcparam1, srcparam2;
 };
@@ -427,6 +427,12 @@ struct MCX_photon { // per thread
         vec.scalexyz(tmp0);
     }
     void savedetector(const float4 detpos[], MCX_detect& detdata, float detphotonbuffer[], const MCX_param& gcfg) {    //< save detected photon data
+        if (gcfg.detna > 0.f) {
+            float costheta = fabsf((ipos.w == 0) ? vec.x : (ipos.w == 1 ? vec.y : vec.z));
+            if (costheta * costheta < 1.f - gcfg.detna * gcfg.detna)
+                return;
+        }
+        
         int detid = 0;
         for (int i = 0; i < gcfg.detnum; i++) {
             if (detpos[i].w < 0.f) continue;
@@ -804,6 +810,7 @@ int MCX_run_simulation(char* argv[], int argn = 1, int nlhs = 0, void* plhs[] = 
         /*.issavedet*/ io.cfg["Session"].value("DoPartialPath", 1), /*.savedetflag*/ io.cfg["Session"].value("SaveDetFlag", (dpDetID + dpPPath)),
         /*.mediumnum*/ (int)io.cfg["Domain"]["Media"].size(), /*.outputtype*/ (int)MCX_outputtype.find(io.cfg["Session"].value("OutputType", "x")[0]),
         /*.detnum*/ (io.cfg["Optode"].contains("Detector") ? (int)io.cfg["Optode"]["Detector"].size() : 0), /*.maxdetphoton*/ io.cfg["Session"].value("MaxDetPhoton", 1000000),
+        /*.detna*/ io.cfg["Optode"].value("NA", 0.f),
         /*.srctype*/ (MCX_sourcetypeid)std::distance(MCX_sourcetype.begin(), std::find(MCX_sourcetype.begin(), MCX_sourcetype.end(), io.cfg["Optode"]["Source"].value("Type", "pencil"))),
         /*.srcparam1*/ {srcparam1[0], srcparam1[1], srcparam1[2], srcparam1[3]}, /*.srcparam2*/ {srcparam2[0], srcparam2[1], srcparam2[2], srcparam2[3]}
     };
