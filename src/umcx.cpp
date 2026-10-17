@@ -427,11 +427,23 @@ struct MCX_photon { // per thread
         vec.scalexyz(tmp0);
     }
     void savedetector(const float4 detpos[], MCX_detect& detdata, float detphotonbuffer[], const MCX_param& gcfg) {    //< save detected photon data
+        int detid = 0;
         for (int i = 0; i < gcfg.detnum; i++) {
-            if ((detpos[i].x - pos.x) * (detpos[i].x - pos.x) + (detpos[i].y - pos.y) * (detpos[i].y - pos.y) + (detpos[i].z - pos.z) * (detpos[i].z - pos.z) < detpos[i].w * detpos[i].w) {
-                detdata.addphoton(i + 1, pos, vec, detphotonbuffer, gcfg);
-            }
+            if (detpos[i].w < 0.f) continue;
+
+            const float4& det = detpos[i];
+            float rin = 0.f;
+            if (i + 1 < gcfg.detnum && detpos[i + 1].w < 0.f)
+                rin = -detpos[++i].w;
+
+            float dx = det.x - pos.x, dy = det.y - pos.y, dz = det.z - pos.z;
+            float d2 = dx * dx + dy * dy + dz * dz;
+
+            detid++;
+            if (d2 >= rin * rin && d2 < det.w * det.w)
+                detdata.addphoton(detid, pos, vec, detphotonbuffer, gcfg);
         }
+
     }
     void sincosf(float ang, float* sine, float* cosine) {    //< sincos helper function
         *sine = sinf(ang);
@@ -607,6 +619,7 @@ struct MCX_userio {    //< main user IO handling interface, must be isolated wit
 
         for (const auto& det : detectors) {
             float radius = det["R"].get<float>();
+            if (radius <= 0.f) continue;
             float4 detpos = {det["Pos"][0].get<float>(), det["Pos"][1].get<float>(), det["Pos"][2].get<float>(), 0.f};
 
             for (float iz = -radius - 1.f + detpos.z; iz <= radius + 1.f + detpos.z; iz += 0.5f) /*search in a cube with edge length 2*R+3*/
